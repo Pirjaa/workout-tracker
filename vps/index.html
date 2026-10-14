@@ -73,8 +73,8 @@
 <div id="login" hidden>
   <div class="card">
     <h3 style="margin-top:0">Login</h3>
-    <p class="mut">Masukkan token dari file <code>.token</code> di VPS.</p>
-    <input id="login-token" type="password" placeholder="Token" autocomplete="off">
+    <p class="mut">Masukkan kata sandi tracker kamu.</p>
+    <input id="login-token" type="password" placeholder="Kata sandi" autocomplete="off">
     <button class="pri" id="login-btn" style="width:100%;margin-top:8px">Masuk</button>
     <p class="mut" id="login-err" style="color:var(--bad)"></p>
   </div>
@@ -105,12 +105,12 @@ function hideLogin(){ $('#login').hidden = true; }
 $('#login-btn').onclick = async () => {
   TOKEN = $('#login-token').value.trim();
   try {
-    await api('/api/ping');
+    await api('/api/templates');   // endpoint butuh auth: kalau 401 berarti kata sandi salah
     localStorage.setItem('wt_token', TOKEN);
     $('#login-err').textContent = '';
     hideLogin();
     render();
-  } catch(e) { $('#login-err').textContent = 'Token salah.'; }
+  } catch(e) { $('#login-err').textContent = 'Kata sandi salah.'; }
 };
 
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {

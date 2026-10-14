@@ -39,6 +39,23 @@ def get_token():
 
 
 TOKEN = get_token()
+
+
+def get_password():
+    pw = os.environ.get("WORKOUT_PASSWORD")
+    if pw and pw.strip():
+        return pw.strip()
+    pp = os.path.join(BASE_DIR, ".password")
+    if os.path.exists(pp):
+        with open(pp) as f:
+            pw = f.read().strip()
+            return pw or None
+    return None
+
+
+PASSWORD = get_password()
+if PASSWORD:
+    print("Password login aktif (dari WORKOUT_PASSWORD/.password)")
 DB_LOCK = threading.Lock()
 
 
@@ -243,7 +260,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def _auth_ok(self):
         auth = self.headers.get("Authorization", "")
-        return auth == f"Bearer {TOKEN}"
+        if auth == "Bearer %s" % TOKEN:
+            return True
+        return bool(PASSWORD) and auth == "Bearer %s" % PASSWORD
 
     def _route(self):
         parsed = urlparse(self.path)

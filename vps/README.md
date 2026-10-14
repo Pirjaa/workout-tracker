@@ -48,3 +48,18 @@ tidak ikut tertimpa.
 API dilindungi token (Bearer). Jangan bagikan token ke orang lain.
 Kalau mau diakses lewat domain + HTTPS, pasang reverse proxy (nginx/Caddy)
 atau Cloudflare Tunnel di depan port 8000.
+
+## Pakai kata sandi sendiri (opsional)
+
+Bawaan memakai token acak 32 karakter (file `.token`). Kalau mau kata sandi
+yang gampang diingat:
+
+```
+echo 'katasandi-pilihanmu' > ~/workout-tracker/.password
+chmod 600 ~/workout-tracker/.password
+sudo systemctl restart workout-tracker
+```
+
+Sesudah itu login pakai kata sandi tersebut. Token acak di `.token` tetap
+bisa dipakai sebagai cadangan. Untuk menghapus kata sandi: hapus file
+`.password` lalu restart service.
