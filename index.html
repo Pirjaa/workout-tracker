@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Workout Tracker</title>
+<style>
+  :root{
+    --bg:#0f1115; --card:#1a1e26; --card2:#222834; --text:#f2f4f8; --muted:#9aa3b2;
+    --accent:#4da3ff; --green:#3ddc84; --red:#ff5d5d; --border:#2c3340;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Arial,sans-serif;
+    padding-bottom:90px;}
+  header{position:sticky; top:0; z-index:10; background:#141821; border-bottom:1px solid var(--border);
+    padding:14px 16px;}
+  header h1{margin:0; font-size:20px;}
+  header p{margin:2px 0 0; font-size:12px; color:var(--muted);}
+  main{padding:12px 12px 0; max-width:640px; margin:0 auto;}
+  nav.tabs{position:fixed; bottom:0; left:0; right:0; z-index:10; display:flex;
+    background:#141821; border-top:1px solid var(--border); padding-bottom:env(safe-area-inset-bottom);}
+  nav.tabs button{flex:1; background:none; border:none; color:var(--muted); font-size:11px;
+    padding:10px 4px 12px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:3px;}
+  nav.tabs button .ico{font-size:20px;}
+  nav.tabs button.active{color:var(--accent);}
+  section.tab{display:none;}
+  section.tab.active{display:block;}
+  .card{background:var(--card); border:1px solid var(--border); border-radius:12px;
+    padding:12px; margin-bottom:12px;}
+  .card h3{margin:0 0 8px; font-size:15px;}
+  .row{display:flex; gap:8px; align-items:center;}
+  .grow{flex:1;}
+  input,select,button{font-size:14px;}
+  input[type=number],input[type=text],input[type=date],select{
+    background:var(--card2); color:var(--text); border:1px solid var(--border);
+    border-radius:8px; padding:9px 10px; width:100%;}
+  input:focus,select:focus{outline:none; border-color:var(--accent);}
+  .btn{background:var(--accent); color:#04121f; border:none; border-radius:10px;
+    padding:11px 14px; font-weight:700; cursor:pointer; width:100%;}
+  .btn:active{transform:scale(.98);}
+  .btn.ghost{background:var(--card2); color:var(--text); border:1px solid var(--border); font-weight:600;}
+  .btn.danger{background:none; color:var(--red); border:1px solid var(--red); font-weight:600;}
+  .btn.small{width:auto; padding:7px 10px; font-size:13px;}
+  .setrow{display:grid; grid-template-columns:34px 1fr 1fr 30px; gap:6px; align-items:center; margin-bottom:6px;}
+  .setrow .n{color:var(--muted); font-size:13px; text-align:center;}
+  .iconbtn{background:none; border:none; color:var(--red); font-size:16px; cursor:pointer; padding:4px;}
+  .exhead{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;}
+  .exhead b{font-size:14px;}
+  .target{font-size:11px; color:var(--muted); margin:-4px 0 8px;}
+  .sess{border:1px solid var(--border); border-radius:12px; background:var(--card); margin-bottom:10px; overflow:hidden;}
+  .sess-head{padding:12px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;}
+  .sess-head b{font-size:14px;}
+  .sess-head small{color:var(--muted); display:block; margin-top:2px;}
+  .sess-body{display:none; padding:0 12px 12px; border-top:1px solid var(--border);}
+  .sess.open .sess-body{display:block;}
+  .sess table{width:100%; border-collapse:collapse; font-size:13px; margin-top:8px;}
+  .sess th{text-align:left; color:var(--muted); font-weight:600; padding:4px 2px; border-bottom:1px solid var(--border);}
+  .sess td{padding:5px 2px; border-bottom:1px solid #232a36;}
+  .pill{display:inline-block; background:var(--card2); border:1px solid var(--border); color:var(--text);
+    border-radius:999px; padding:8px 14px; font-size:13px; margin:0 6px 8px 0; cursor:pointer;}
+  .pill.active{background:var(--accent); color:#04121f; border-color:var(--accent); font-weight:700;}
+  canvas.chart{width:100%; height:220px; background:var(--card2); border-radius:10px;}
+  .stat{display:flex; justify-content:space-between; font-size:13px; color:var(--muted); margin-top:8px;}
+  .stat b{color:var(--text);}
+  .empty{color:var(--muted); text-align:center; padding:24px 12px; font-size:14px;}
+  .hint{font-size:12px; color:var(--muted); margin-top:8px; line-height:1.5;}
+  .tpl-ex{display:flex; gap:6px; align-items:center; margin-bottom:6px;}
+  .tpl-ex input[type=text]{flex:2;} .tpl-ex input[type=number]{flex:1;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🏋️ Workout Tracker</h1>
+  <p>Catat sesi, lihat progres. Data tersimpan di perangkat ini.</p>
+</header>
+
+<main>
+  <!-- LATIHAN -->
+  <section id="tab-workout" class="tab active">
+    <div id="workoutIdle">
+      <div class="card">
+        <h3>Mulai Sesi Baru</h3>
+        <div id="tplPills"></div>
+        <div class="row">
+          <button class="btn ghost" id="btnCustom">Sesi Kosong</button>
+        </div>
+        <p class="hint">Pilih template sesuai hari latihan, atau mulai dari sesi kosong.</p>
+      </div>
+    </div>
+    <div id="workoutActive" style="display:none">
+      <div class="card">
+        <div class="row">
+          <input type="text" id="sessName" class="grow" placeholder="Nama sesi (mis. Chest)">
+          <input type="date" id="sessDate" style="width:150px">
+        </div>
+      </div>
+      <div id="exList"></div>
+      <div class="card">
+        <button class="btn ghost" id="btnAddEx">+ Tambah Gerakan</button>
+      </div>
+      <div class="card">
+        <button class="btn" id="btnFinish">✅ Simpan Sesi</button>
+        <div style="height:8px"></div>
+        <button class="btn danger" id="btnCancel">Batalkan</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIWAYAT -->
+  <section id="tab-history" class="tab">
+    <div id="histList"></div>
+  </section>
+
+  <!-- PROGRESS -->
+  <section id="tab-progress" class="tab">
+    <div class="card">
+      <h3>Pilih Gerakan</h3>
+      <select id="progEx"></select>
+      <div class="stat"><span>Sesi tercatat</span><b id="progCount">0</b></div>
+      <div class="stat"><span>Beban terbaik</span><b id="progBest">-</b></div>
+      <div class="stat"><span>Total volume</span><b id="progVol">-</b></div>
+    </div>
+    <div class="card">
+      <h3>Grafik Beban Maks per Sesi (kg)</h3>
+      <canvas class="chart" id="chartKg" width="600" height="220"></canvas>
+    </div>
+    <div class="card">
+      <h3>Grafik Volume per Sesi (kg × reps)</h3>
+      <canvas class="chart" id="chartVol" width="600" height="220"></canvas>
+    </div>
+  </section>
+
+  <!-- TEMPLATE -->
+  <section id="tab-templates" class="tab">
+    <div id="tplList"></div>
+    <div class="card">
+      <button class="btn ghost" id="btnAddTpl">+ Template Baru</button>
+    </div>
+  </section>
+</main>
+
+<nav class="tabs">
+  <button data-tab="tab-workout" class="active"><span class="ico">💪</span>Latihan</button>
+  <button data-tab="tab-history"><span class="ico">🗂️</span>Riwayat</button>
+  <button data-tab="tab-progress"><span class="ico">📈</span>Progress</button>
+  <button data-tab="tab-templates"><span class="ico">📋</span>Template</button>
+</nav>
+
+<script>
+"use strict";
+/* ============ DATA ============ */
+const LS_KEY = "wt_state_v1";
+
+function defaultState(){
+  return {
+    templates: {
+      chest: { name:"Chest", exercises:[
+        {name:"Smith Machine Bench Press", sets:4, reps:"6-8"},
+        {name:"Smith Machine Incline Press", sets:4, reps:"8-10"},
+        {name:"Pec Deck", sets:3, reps:"10-12"},
+        {name:"Assisted Dips", sets:3, reps:"8-12"}
+      ]},
+      back: { name:"Back", exercises:[
+        {name:"Lat Pulldown", sets:4, reps:"8-10"},
+        {name:"Seated Cable Row", sets:4, reps:"8-10"},
+        {name:"One-arm Dumbbell Row", sets:3, reps:"8-10"},
+        {name:"Straight-arm Cable Pulldown", sets:3, reps:"10-12"},
+        {name:"Back Extension", sets:2, reps:"12-15"}
+      ]},
+      legs: { name:"Kaki", exercises:[
+        {name:"Squat", sets:4, reps:"6-8"},
+        {name:"Leg Press", sets:3, reps:"8-10"},
+        {name:"Romanian Deadlift", sets:3, reps:"8-10"},
+        {name:"Leg Curl", sets:3, reps:"10-12"},
+        {name:"Calf Raise", sets:3, reps:"12-15"}
+      ]},
+      shoulders: { name:"Bahu", exercises:[
+        {name:"Overhead Press", sets:4, reps:"6-8"},
+        {name:"Lateral Raise", sets:3, reps:"10-12"},
+        {name:"Rear Delt Fly", sets:3, reps:"10-12"},
+        {name:"Shrugs", sets:3, reps:"10-12"}
+      ]},
+      arms: { name:"Lengan", exercises:[
+        {name:"Barbell Curl", sets:3, reps:"8-10"},
+        {name:"Hammer Curl", sets:3, reps:"10-12"},
+        {name:"Tricep Pushdown", sets:3, reps:"10-12"},
+        {name:"Overhead Tricep Extension", sets:3, reps:"10-12"}
+      ]}
+    },
+    sessions: [
+      { id:"seed-20261014", date:"2026-10-14", name:"Chest", exercises:[
+        {name:"Smith Machine Bench Press", sets:[{kg:10,reps:6},{kg:15,reps:7},{kg:15,reps:8},{kg:20,reps:6}]},
+        {name:"Smith Machine Incline Press", sets:[{kg:10,reps:8},{kg:10,reps:7},{kg:10,reps:7},{kg:15,reps:2}]},
+        {name:"Pec Deck", sets:[{kg:12,reps:6},{kg:16,reps:8},{kg:20,reps:6},{kg:16,reps:13}]}
+      ]}
+    ]
+  };
+}
+
+let S;
+try{
+  const raw = localStorage.getItem(LS_KEY);
+  S = raw ? JSON.parse(raw) : defaultState();
+  if(!S.templates || !S.sessions) S = defaultState();
+}catch(e){ S = defaultState(); }
+function save(){ localStorage.setItem(LS_KEY, JSON.stringify(S)); }
+function uid(){ return "s"+Date.now().toString(36)+Math.floor(Math.random()*1e4); }
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function fmtDate(d){ const [y,m,dd]=d.split("-"); return `${dd}/${m}/${y}`; }
+
+/* ============ TABS ============ */
+document.querySelectorAll("nav.tabs button").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    document.querySelectorAll("nav.tabs button").forEach(x=>x.classList.remove("active"));
+    document.querySelectorAll("section.tab").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    document.getElementById(b.dataset.tab).classList.add("active");
+    if(b.dataset.tab==="tab-history") renderHistory();
+    if(b.dataset.tab==="tab-progress") renderProgress();
+    if(b.dataset.tab==="tab-templates") renderTemplates();
+  });
+});
+
+/* ============ WORKOUT ============ */
+let W = null; // active workout {name,date,exercises:[{name,sets:[{kg,reps}]}]}
+
+function renderTplPills(){
+  const el = document.getElementById("tplPills");
+  el.innerHTML = Object.entries(S.templates).map(([k,t])=>
+    `<span class="pill" data-k="${k}">${esc(t.name)}</span>`).join("");
+  el.querySelectorAll(".pill").forEach(p=>p.addEventListener("click",()=>startWorkout(p.dataset.k)));
+}
+
+function startWorkout(tplKey){
+  const t = tplKey ? S.templates[tplKey] : null;
+  W = { name: t?t.name:"", date: new Date().toISOString().slice(0,10), exercises: [] };
+  if(t) t.exercises.forEach(e=>{
+    const sets=[]; for(let i=0;i<e.sets;i++) sets.push({kg:"",reps:""});
+    W.exercises.push({name:e.name, target:`${e.sets} × ${e.reps}`, sets});
+  });
+  document.getElementById("workoutIdle").style.display="none";
+  document.getElementById("workoutActive").style.display="block";
+  document.getElementById("sessName").value = W.name;
+  document.getElementById("sessDate").value = W.date;
+  renderWorkout();
+}
+
+function renderWorkout(){
+  const el = document.getElementById("exList");
+  el.innerHTML = W.exercises.map((e,ei)=>`
+    <div class="card">
+      <div class="exhead">
+        <b>${esc(e.name)||"(tanpa nama)"}</b>
+        <button class="iconbtn" data-del-ex="${ei}">🗑️</button>
+      </div>
+      ${e.target?`<div class="target">Target: ${esc(e.target)}</div>`:""}
+      ${e.sets.map((s,si)=>`
+        <div class="setrow">
+          <div class="n">${si+1}</div>
+          <input type="number" inputmode="decimal" placeholder="kg" value="${s.kg}" data-e="${ei}" data-s="${si}" data-f="kg">
+          <input type="number" inputmode="numeric" placeholder="reps" value="${s.reps}" data-e="${ei}" data-s="${si}" data-f="reps">
+          <button class="iconbtn" data-del-set="${ei}:${si}">✕</button>
+        </div>`).join("")}
+      <button class="btn ghost small" data-add-set="${ei}">+ Set</button>
+    </div>`).join("");
+
+  el.querySelectorAll("input").forEach(inp=>inp.addEventListener("input",()=>{
+    const e=+inp.dataset.e, s=+inp.dataset.s;
+    W.exercises[e].sets[s][inp.dataset.f]=inp.value;
+  }));
+  el.querySelectorAll("[data-add-set]").forEach(b=>b.addEventListener("click",()=>{
+    W.exercises[+b.dataset.addSet].sets.push({kg:"",reps:""}); renderWorkout();
+  }));
+  el.querySelectorAll("[data-del-set]").forEach(b=>b.addEventListener("click",()=>{
+    const [e,s]=b.dataset.delSet.split(":").map(Number);
+    W.exercises[e].sets.splice(s,1); renderWorkout();
+  }));
+  el.querySelectorAll("[data-del-ex]").forEach(b=>b.addEventListener("click",()=>{
+    if(confirm("Hapus gerakan ini?")){ W.exercises.splice(+b.dataset.delEx,1); renderWorkout(); }
+  }));
+}
+
+document.getElementById("btnCustom").addEventListener("click",()=>startWorkout(null));
+document.getElementById("btnAddEx").addEventListener("click",()=>{
+  const n = prompt("Nama gerakan:");
+  if(n){ W.exercises.push({name:n, target:"", sets:[{kg:"",reps:""}]}); renderWorkout(); }
+});
+document.getElementById("btnCancel").addEventListener("click",()=>{
+  if(confirm("Batalkan sesi ini? Data yang belum disimpan hilang.")){ W=null;
+    document.getElementById("workoutActive").style.display="none";
+    document.getElementById("workoutIdle").style.display="block"; }
+});
+document.getElementById("btnFinish").addEventListener("click",()=>{
+  W.name = document.getElementById("sessName").value.trim() || "Sesi";
+  W.date = document.getElementById("sessDate").value || new Date().toISOString().slice(0,10);
+  W.exercises = W.exercises.filter(e=>e.sets.some(s=>s.kg!==""&&s.reps!=="")).map(e=>({
+    name:e.name, sets:e.sets.filter(s=>s.kg!==""&&s.reps!=="").map(s=>({kg:parseFloat(s.kg)||0, reps:parseInt(s.reps)||0}))
+  }));
+  if(!W.exercises.length){ alert("Belum ada set yang diisi."); return; }
+  S.sessions.push({id:uid(), date:W.date, name:W.name, exercises:W.exercises});
+  S.sessions.sort((a,b)=>a.date<b.date?-1:1);
+  save(); W=null;
+  document.getElementById("workoutActive").style.display="none";
+  document.getElementById("workoutIdle").style.display="block";
+  alert("Sesi tersimpan! 💪");
+});
+
+/* ============ HISTORY ============ */
+function sessVolume(s){ return s.exercises.reduce((a,e)=>a+e.sets.reduce((x,t)=>x+t.kg*t.reps,0),0); }
+function renderHistory(){
+  const el = document.getElementById("histList");
+  if(!S.sessions.length){ el.innerHTML=`<div class="empty">Belum ada sesi. Mulai catat dari tab Latihan 💪</div>`; return; }
+  el.innerHTML = S.sessions.slice().reverse().map(s=>`
+    <div class="sess" data-id="${s.id}">
+      <div class="sess-head">
+        <div><b>${esc(s.name)}</b><small>${fmtDate(s.date)} · ${s.exercises.length} gerakan · vol ${Math.round(sessVolume(s)).toLocaleString("id-ID")} kg</small></div>
+        <div class="row">
+          <button class="iconbtn" data-hdel="${s.id}">🗑️</button>
+          <span style="color:var(--muted)">▾</span>
+        </div>
+      </div>
+      <div class="sess-body">
+        ${s.exercises.map(e=>`
+          <table><tr><th colspan="3">${esc(e.name)}</th></tr>
+          ${e.sets.map((t,i)=>`<tr><td style="width:40px;color:var(--muted)">Set ${i+1}</td><td>${t.kg} kg</td><td>× ${t.reps}</td></tr>`).join("")}
+          </table>`).join("")}
+      </div>
+    </div>`).join("");
+  el.querySelectorAll(".sess-head").forEach(h=>h.addEventListener("click",ev=>{
+    if(ev.target.closest("[data-hdel]")) return;
+    h.parentElement.classList.toggle("open");
+  }));
+  el.querySelectorAll("[data-hdel]").forEach(b=>b.addEventListener("click",()=>{
+    if(confirm("Hapus sesi ini?")){ S.sessions=S.sessions.filter(x=>x.id!==b.dataset.hdel); save(); renderHistory(); }
+  }));
+}
+
+/* (lanjutan: progress & template) */
+;
+/* ============ PROGRESS ============ */
+function exNames(){
+  const m = new Map();
+  S.sessions.forEach(s=>s.exercises.forEach(e=>{
+    if(!m.has(e.name)) m.set(e.name, []);
+    m.get(e.name).push(s);
+  }));
+  return m;
+}
+function renderProgress(){
+  const sel = document.getElementById("progEx");
+  const names = [...exNames().keys()].sort();
+  const cur = sel.value;
+  sel.innerHTML = names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("");
+  if(names.includes(cur)) sel.value = cur;
+  sel.onchange = drawProgress;
+  drawProgress();
+}
+function drawProgress(){
+  const name = document.getElementById("progEx").value;
+  const sessions = (exNames().get(name)||[]).slice().sort((a,b)=>a.date<b.date?-1:1);
+  document.getElementById("progCount").textContent = sessions.length;
+  const pts = sessions.map(s=>{
+    const ex = s.exercises.find(e=>e.name===name);
+    const maxKg = Math.max(...ex.sets.map(t=>t.kg));
+    const vol = ex.sets.reduce((a,t)=>a+t.kg*t.reps,0);
+    return {date:s.date, maxKg, vol};
+  });
+  const best = pts.length? Math.max(...pts.map(p=>p.maxKg)) : 0;
+  const totVol = pts.reduce((a,p)=>a+p.vol,0);
+  document.getElementById("progBest").textContent = pts.length? best+" kg" : "-";
+  document.getElementById("progVol").textContent = pts.length? Math.round(totVol).toLocaleString("id-ID")+" kg" : "-";
+  lineChart(document.getElementById("chartKg"), pts.map(p=>({x:p.date, y:p.maxKg})), "kg");
+  lineChart(document.getElementById("chartVol"), pts.map(p=>({x:p.date, y:p.vol})), "vol");
+}
+function lineChart(cv, pts, unit){
+  const ctx = cv.getContext("2d");
+  const Wd=600, Ht=220, pad={l:44,r:12,t:14,b:30};
+  ctx.clearRect(0,0,Wd,Ht);
+  ctx.fillStyle="#222834"; ctx.fillRect(0,0,Wd,Ht);
+  if(pts.length<1){
+    ctx.fillStyle="#9aa3b2"; ctx.font="14px sans-serif"; ctx.textAlign="center";
+    ctx.fillText("Belum ada data", Wd/2, Ht/2); return;
+  }
+  const ys = pts.map(p=>p.y);
+  let mn=Math.min(...ys), mx=Math.max(...ys);
+  if(mx===mn){ mx+=1; mn-=1; }
+  const X=i=> pad.l + (pts.length===1? (Wd-pad.l-pad.r)/2 : i*(Wd-pad.l-pad.r)/(pts.length-1));
+  const Y=v=> pad.t + (1-(v-mn)/(mx-mn))*(Ht-pad.t-pad.b);
+  ctx.strokeStyle="#2c3340"; ctx.fillStyle="#9aa3b2"; ctx.font="11px sans-serif"; ctx.textAlign="right";
+  for(let g=0; g<=4; g++){
+    const v = mn+(mx-mn)*g/4, y=Y(v);
+    ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(Wd-pad.r,y); ctx.stroke();
+    ctx.fillText((Math.round(v*10)/10).toString(), pad.l-6, y+4);
+  }
+  ctx.strokeStyle="#4da3ff"; ctx.lineWidth=2.5; ctx.beginPath();
+  pts.forEach((p,i)=>{ i?ctx.lineTo(X(i),Y(p.y)):ctx.moveTo(X(i),Y(p.y)); });
+  ctx.stroke();
+  ctx.fillStyle="#4da3ff";
+  pts.forEach((p,i)=>{ ctx.beginPath(); ctx.arc(X(i),Y(p.y),4,0,7); ctx.fill(); });
+  ctx.fillStyle="#9aa3b2"; ctx.textAlign="center";
+  pts.forEach((p,i)=>{ if(pts.length>6 && i%2) return;
+    ctx.fillText(p.x.slice(5).replace("-","/"), X(i), Ht-10); });
+}
+
+/* ============ TEMPLATES ============ */
+function renderTemplates(){
+  const el = document.getElementById("tplList");
+  el.innerHTML = Object.entries(S.templates).map(([k,t])=>`
+    <div class="card">
+      <div class="exhead"><b>📋 ${esc(t.name)}</b>
+        <button class="iconbtn" data-tdel="${k}">🗑️</button></div>
+      ${t.exercises.map((e,i)=>`
+        <div class="tpl-ex">
+          <input type="text" value="${esc(e.name)}" data-tk="${k}" data-i="${i}" data-f="name">
+          <input type="number" value="${e.sets}" data-tk="${k}" data-i="${i}" data-f="sets" title="set">
+          <input type="text" value="${esc(e.reps)}" data-tk="${k}" data-i="${i}" data-f="reps" title="reps">
+          <button class="iconbtn" data-tex-del="${k}:${i}">✕</button>
+        </div>`).join("")}
+      <button class="btn ghost small" data-tex-add="${k}">+ Gerakan</button>
+    </div>`).join("");
+  el.querySelectorAll("input").forEach(inp=>inp.addEventListener("change",()=>{
+    const t=S.templates[inp.dataset.tk], e=t.exercises[+inp.dataset.i], f=inp.dataset.f;
+    e[f] = f==="sets" ? (parseInt(inp.value)||1) : inp.value; save(); renderTplPills();
+  }));
+  el.querySelectorAll("[data-tex-add]").forEach(b=>b.addEventListener("click",()=>{
+    S.templates[b.dataset.texAdd].exercises.push({name:"Gerakan baru", sets:3, reps:"8-10"});
+    save(); renderTemplates(); renderTplPills();
+  }));
+  el.querySelectorAll("[data-tex-del]").forEach(b=>b.addEventListener("click",()=>{
+    const [k,i]=b.dataset.texDel.split(":"); S.templates[k].exercises.splice(+i,1);
+    save(); renderTemplates(); renderTplPills();
+  }));
+  el.querySelectorAll("[data-tdel]").forEach(b=>b.addEventListener("click",()=>{
+    if(confirm("Hapus template ini?")){ delete S.templates[b.dataset.tdel]; save(); renderTemplates(); renderTplPills(); }
+  }));
+}
+document.getElementById("btnAddTpl").addEventListener("click",()=>{
+  const n = prompt("Nama template (mis. Push Day):");
+  if(n){ S.templates["t"+Date.now()]={name:n, exercises:[{name:"Gerakan baru", sets:3, reps:"8-10"}]};
+    save(); renderTemplates(); renderTplPills(); }
+});
+
+/* ============ INIT ============ */
+renderTplPills();
+renderHistory();
+</script>
+</body>
+</html>
