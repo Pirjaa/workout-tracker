@@ -46,6 +46,7 @@ def db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA busy_timeout = 5000")
     return conn
 
 
@@ -280,6 +281,17 @@ class Handler(BaseHTTPRequestHandler):
                 result = self._api(conn, self.command, path, qs, body)
             except ValueError as e:
                 self._send(400, {"error": str(e)})
+                return
+            except Exception as e:
+                # Never drop the connection silently: report server errors as JSON.
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                try:
+                    self._send(500, {"error": "%s: %s" % (type(e).__name__, e)})
+                except Exception:
+                    pass
                 return
             if result is None:
                 self._send(404, {"error": "not found"})
