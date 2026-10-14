@@ -42,6 +42,7 @@
   .badge.fail { background:#3a1d1d; color:var(--bad); }
   #login { position:fixed; inset:0; background:var(--bg); z-index:50; display:flex;
            align-items:center; justify-content:center; padding:20px; }
+  #login[hidden] { display:none !important; }
   #login .card { width:100%; max-width:360px; }
   canvas { width:100%; height:220px; background:#0e1216; border:1px solid var(--line); border-radius:10px; }
   .seg { display:flex; gap:6px; margin:8px 0; }
@@ -99,8 +100,8 @@ async function api(path, method='GET', body) {
   if (!r.ok) throw new Error(j.error || ('HTTP '+r.status));
   return j;
 }
-function showLogin(){ $('#login').hidden = false; }
-function hideLogin(){ $('#login').hidden = true; }
+function showLogin(){ const l = $('#login'); l.hidden = false; l.style.display = 'flex'; }
+function hideLogin(){ const l = $('#login'); l.hidden = true; l.style.display = 'none'; }
 
 $('#login-btn').onclick = async () => {
   TOKEN = $('#login-token').value.trim();
@@ -436,6 +437,7 @@ function drawChart(points) {
 /* ---------- BOOT ---------- */
 async function render() {
   if (!TOKEN) { showLogin(); return; }
+  hideLogin();
   try {
     if (curTab==='workout') await renderWorkout();
     else if (curTab==='history') await renderHistory();
