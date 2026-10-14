@@ -5,12 +5,6 @@
 set -e
 
 DOMAIN="tracker.joysi.my.id"
-EMAIL="ganti-dengan-email@kamu.com"   # <-- GANTI dengan email kamu (untuk notif expiry cert)
-
-if [ "$EMAIL" = "ganti-dengan-email@kamu.com" ]; then
-  echo "Ganti dulu EMAIL di dalam script ini, lalu jalankan lagi."
-  exit 1
-fi
 
 sudo apt update && sudo apt install -y nginx certbot python3-certbot-nginx
 sudo ufw allow 80,443/tcp 2>/dev/null || true
@@ -19,7 +13,9 @@ sudo cp nginx-tracker.conf /etc/nginx/sites-available/tracker
 sudo ln -sf /etc/nginx/sites-available/tracker /etc/nginx/sites-enabled/tracker
 sudo nginx -t && sudo systemctl reload nginx
 
-sudo certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect
+# Tanpa email: tetap auto-renew, cuma tanpa notifikasi expiry dari EFF.
+sudo certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos \
+  --register-unsafely-without-email --redirect
 
 echo ""
 echo "==================================="
