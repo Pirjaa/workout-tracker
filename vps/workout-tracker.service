@@ -1,0 +1,15 @@
+[Unit]
+Description=Workout Tracker (pirja)
+After=network.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__APP_DIR__
+ExecStart=/usr/bin/python3 __APP_DIR__/app.py
+Restart=always
+RestartSec=3
+Environment=PORT=8000
+
+[Install]
+WantedBy=multi-user.target

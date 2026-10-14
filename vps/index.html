@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Workout Tracker</title>
+<style>
+  :root { --bg:#101418; --card:#1a2027; --line:#2a323b; --txt:#e8edf2; --mut:#93a1b0;
+          --acc:#4da3ff; --ok:#3ecf6f; --bad:#ff5d5d; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--txt);
+         font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif; font-size:15px; }
+  header { position:sticky; top:0; background:#0b0e11; padding:12px 16px;
+           border-bottom:1px solid var(--line); z-index:5; }
+  header h1 { margin:0; font-size:18px; }
+  nav { display:flex; gap:6px; padding:10px 12px; position:sticky; top:53px;
+        background:var(--bg); z-index:5; border-bottom:1px solid var(--line); }
+  nav button { flex:1; padding:10px 4px; border:1px solid var(--line); border-radius:10px;
+               background:var(--card); color:var(--mut); font-size:13px; }
+  nav button.on { color:#fff; border-color:var(--acc); background:#16283d; }
+  main { padding:14px 14px 90px; max-width:640px; margin:0 auto; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px;
+          padding:14px; margin-bottom:12px; }
+  .row { display:flex; gap:8px; align-items:center; }
+  .grow { flex:1; }
+  input, select, textarea { width:100%; padding:10px; border-radius:8px; border:1px solid var(--line);
+      background:#0e1216; color:var(--txt); font-size:15px; margin:4px 0; }
+  input[type=number] { width:84px; }
+  button { padding:10px 14px; border-radius:10px; border:1px solid var(--line);
+           background:#232c36; color:var(--txt); font-size:14px; }
+  button.pri { background:var(--acc); border-color:var(--acc); color:#04121f; font-weight:700; }
+  button.danger { color:var(--bad); }
+  button.small { padding:6px 10px; font-size:12px; }
+  .mut { color:var(--mut); font-size:13px; }
+  .ex { border-top:1px solid var(--line); padding:10px 0; }
+  .ex h3 { margin:0 0 6px; font-size:15px; }
+  table.sets { width:100%; border-collapse:collapse; font-size:14px; }
+  table.sets td, table.sets th { padding:7px 4px; border-bottom:1px solid var(--line); text-align:center; }
+  table.sets td.l { text-align:left; }
+  tr.failed td { color:var(--bad); }
+  .badge { font-size:11px; padding:2px 8px; border-radius:20px; background:#2a323b; color:var(--mut); }
+  .badge.fail { background:#3a1d1d; color:var(--bad); }
+  #login { position:fixed; inset:0; background:var(--bg); z-index:50; display:flex;
+           align-items:center; justify-content:center; padding:20px; }
+  #login .card { width:100%; max-width:360px; }
+  canvas { width:100%; height:220px; background:#0e1216; border:1px solid var(--line); border-radius:10px; }
+  .seg { display:flex; gap:6px; margin:8px 0; }
+  .seg button { flex:1; }
+  .seg button.on { border-color:var(--acc); color:var(--acc); }
+  .hist { padding:12px 0; border-bottom:1px solid var(--line); }
+  .hist:last-child { border-bottom:none; }
+  .tpl-ex { font-size:13px; color:var(--mut); padding:3px 0; }
+  details { margin-top:8px; }
+  summary { cursor:pointer; color:var(--acc); font-size:13px; }
+  .kembali { margin-bottom:10px; }
+</style>
+</head>
+<body>
+<header><h1>🏋️ Workout Tracker</h1></header>
+<nav>
+  <button data-tab="workout" class="on">Latihan</button>
+  <button data-tab="history">Riwayat</button>
+  <button data-tab="templates">Template</button>
+  <button data-tab="progress">Progres</button>
+</nav>
+<main>
+  <section id="tab-workout"></section>
+  <section id="tab-history" hidden></section>
+  <section id="tab-templates" hidden></section>
+  <section id="tab-progress" hidden></section>
+</main>
+
+<div id="login" hidden>
+  <div class="card">
+    <h3 style="margin-top:0">Login</h3>
+    <p class="mut">Masukkan token dari file <code>.token</code> di VPS.</p>
+    <input id="login-token" type="password" placeholder="Token" autocomplete="off">
+    <button class="pri" id="login-btn" style="width:100%;margin-top:8px">Masuk</button>
+    <p class="mut" id="login-err" style="color:var(--bad)"></p>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+let TOKEN = localStorage.getItem('wt_token') || '';
+let activeSession = null;   // session detail object
+let curTab = 'workout';
+
+async function api(path, method='GET', body) {
+  const r = await fetch(path, {
+    method,
+    headers: Object.assign({'Content-Type':'application/json'},
+      TOKEN ? {'Authorization':'Bearer '+TOKEN} : {}),
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if (r.status === 401) { showLogin(); throw new Error('unauthorized'); }
+  if (r.status === 204) return null;
+  const j = await r.json().catch(()=>({}));
+  if (!r.ok) throw new Error(j.error || ('HTTP '+r.status));
+  return j;
+}
+function showLogin(){ $('#login').hidden = false; }
+function hideLogin(){ $('#login').hidden = true; }
+
+$('#login-btn').onclick = async () => {
+  TOKEN = $('#login-token').value.trim();
+  try {
+    await api('/api/ping');
+    localStorage.setItem('wt_token', TOKEN);
+    $('#login-err').textContent = '';
+    hideLogin();
+    render();
+  } catch(e) { $('#login-err').textContent = 'Token salah.'; }
+};
+
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); curTab = b.dataset.tab;
+  ['workout','history','templates','progress'].forEach(t =>
+    $('#tab-'+t).hidden = (t !== curTab));
+  render();
+});
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function fmtVol(v){ return v >= 1000 ? (v/1000).toFixed(1)+'t' : Math.round(v)+''; }
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+function fmtDate(d){ const [y,m,dd]=d.split('-'); return `${dd}/${m}/${y}`; }
+</script>
+
+<script>
+/* ---------- TAB: LATIHAN ---------- */
+async function renderWorkout() {
+  const el = $('#tab-workout');
+  if (!activeSession) {
+    const [sessions, templates] = await Promise.all([
+      api('/api/sessions').catch(()=>[]), api('/api/templates').catch(()=>[])
+    ]);
+    const open = sessions[0];
+    el.innerHTML = `
+      <div class="card">
+        <h3 style="margin-top:0">Sesi baru</h3>
+        <div class="row">
+          <input id="ns-date" type="date" value="${todayISO()}" style="flex:1">
+          <input id="ns-name" placeholder="Nama sesi (mis. Back)" style="flex:2">
+        </div>
+        <div class="row" style="margin-top:8px">
+          <select id="ns-tpl" class="grow">
+            <option value="">— atau mulai dari template —</option>
+            ${templates.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}
+          </select>
+        </div>
+        <button class="pri" id="ns-go" style="width:100%;margin-top:10px">Mulai latihan</button>
+      </div>
+      ${open ? `<div class="card"><div class="mut">Terakhir</div>
+        <div class="row"><div class="grow"><b>${esc(open.name)}</b>
+        <div class="mut">${fmtDate(open.date)} · ${open.exercises} gerakan · vol ${fmtVol(open.volume)} kg</div></div>
+        <button data-open="${open.id}">Buka</button></div></div>` : ''}`;
+    $('#ns-go').onclick = async () => {
+      const tpl = $('#ns-tpl').value;
+      try {
+        activeSession = tpl
+          ? await api(`/api/templates/${tpl}/start-from-template`, 'POST')
+          : await api('/api/sessions', 'POST',
+              {date: $('#ns-date').value || todayISO(), name: $('#ns-name').value || 'Workout'});
+        render();
+      } catch(e){ alert(e.message); }
+    };
+    el.querySelectorAll('[data-open]').forEach(b => b.onclick = async () => {
+      activeSession = await api('/api/sessions/'+b.dataset.open);
+      render();
+    });
+    return;
+  }
+  const s = activeSession;
+  el.innerHTML = `
+    <div class="card">
+      <button class="small kembali" id="w-back">← semua sesi</button>
+      <h3 style="margin:6px 0">${esc(s.name)} <span class="mut">${fmtDate(s.date)}</span></h3>
+      ${s.exercises.map(e => `
+        <div class="ex">
+          <div class="row"><h3 class="grow">${esc(e.name)}</h3>
+            <button class="small danger" data-delex="${e.id}">hapus</button></div>
+          <table class="sets">
+            <tr><th>Set</th><th>Beban (kg)</th><th>Reps</th><th></th></tr>
+            ${e.sets.map(st => `
+              <tr class="${st.failed?'failed':''}">
+                <td>${st.set_no}${st.failed?' ✕':''}</td>
+                <td>${st.weight}</td><td>${st.reps}</td>
+                <td><button class="small" data-editset="${st.id}">edit</button>
+                    <button class="small danger" data-delset="${st.id}">×</button></td>
+              </tr>`).join('')}
+          </table>
+          <div class="row" style="margin-top:6px">
+            <input type="number" id="w-${e.id}" placeholder="kg" step="any" inputmode="decimal">
+            <input type="number" id="r-${e.id}" placeholder="reps" inputmode="numeric">
+            <button class="small" id="f-${e.id}" title="set gagal">✕</button>
+            <button class="pri" data-addset="${e.id}">+ Set</button>
+          </div>
+        </div>`).join('')}
+      <div class="row" style="margin-top:10px">
+        <input id="new-ex" class="grow" placeholder="Tambah gerakan (mis. Dips)">
+        <button id="add-ex">+ Gerakan</button>
+      </div>
+      <button id="w-done" style="width:100%;margin-top:12px">Selesai ✓</button>
+    </div>`;
+  $('#w-back').onclick = () => { activeSession = null; render(); };
+  $('#w-done').onclick = () => { activeSession = null; render(); };
+  $('#add-ex').onclick = async () => {
+    const name = $('#new-ex').value.trim();
+    if (!name) return;
+    activeSession = await api(`/api/sessions/${s.id}/exercises`, 'POST', {name});
+    const full = await api('/api/sessions/'+s.id); activeSession = full; render();
+  };
+  el.querySelectorAll('[data-delex]').forEach(b => b.onclick = async () => {
+    if (!confirm('Hapus gerakan ini + semua setnya?')) return;
+    await api('/api/exercises/'+b.dataset.delex, 'DELETE');
+    activeSession = await api('/api/sessions/'+s.id); render();
+  });
+  el.querySelectorAll('[data-addset]').forEach(b => b.onclick = async () => {
+    const eid = b.dataset.addset;
+    const w = parseFloat($('#w-'+eid).value) || 0;
+    const r = parseInt($('#r-'+eid).value) || 0;
+    const failed = b.dataset.failed === '1';
+    if (!r && !w) { alert('Isi beban / reps dulu'); return; }
+    await api(`/api/exercises/${eid}/sets`, 'POST', {weight:w, reps:r, failed});
+    b.dataset.failed = '0'; $('#f-'+eid).style.borderColor = '';
+    activeSession = await api('/api/sessions/'+s.id); render();
+  });
+  el.querySelectorAll('[id^="f-"]').forEach(b => b.onclick = () => {
+    const addBtn = document.querySelector(`[data-addset="${b.id.slice(2)}"]`);
+    const on = addBtn.dataset.failed === '1';
+    addBtn.dataset.failed = on ? '0' : '1';
+    b.style.borderColor = on ? '' : 'var(--bad)';
+    b.style.color = on ? '' : 'var(--bad)';
+  });
+  el.querySelectorAll('[data-delset]').forEach(b => b.onclick = async () => {
+    await api('/api/sets/'+b.dataset.delset, 'DELETE');
+    activeSession = await api('/api/sessions/'+s.id); render();
+  });
+  el.querySelectorAll('[data-editset]').forEach(b => b.onclick = async () => {
+    const cur = await api('/api/sessions/'+s.id);
+    let st = null;
+    cur.exercises.forEach(e => e.sets.forEach(x => { if (x.id == b.dataset.editset) st = x; }));
+    const w = prompt('Beban (kg):', st.weight); if (w === null) return;
+    const r = prompt('Reps:', st.reps); if (r === null) return;
+    const f = confirm('Set gagal? (OK = ya, Cancel = tidak)');
+    await api('/api/sets/'+st.id, 'PUT', {weight: parseFloat(w)||0, reps: parseInt(r)||0, failed:f});
+    activeSession = await api('/api/sessions/'+s.id); render();
+  });
+}
+
+/* ---------- TAB: RIWAYAT ---------- */
+let histDetail = null;
+async function renderHistory() {
+  const el = $('#tab-history');
+  if (histDetail) {
+    const s = histDetail;
+    const vol = s.exercises.reduce((a,e)=>a+e.sets.reduce((x,st)=>x+st.weight*st.reps,0),0);
+    el.innerHTML = `<div class="card">
+      <button class="small kembali" id="h-back">← riwayat</button>
+      <h3 style="margin:6px 0">${esc(s.name)} <span class="mut">${fmtDate(s.date)}</span></h3>
+      <div class="mut">Volume total: ${fmtVol(vol)} kg</div>
+      ${s.exercises.map(e=>`<div class="ex"><h3>${esc(e.name)}</h3>
+        <table class="sets"><tr><th>Set</th><th>Beban</th><th>Reps</th></tr>
+        ${e.sets.map(st=>`<tr class="${st.failed?'failed':''}">
+          <td>${st.set_no}${st.failed?' ✕':''}</td><td>${st.weight}</td><td>${st.reps}</td></tr>`).join('')}
+        </table></div>`).join('')}
+      <button class="danger" id="h-del" style="width:100%;margin-top:8px">Hapus sesi ini</button>
+    </div>`;
+    $('#h-back').onclick = () => { histDetail = null; render(); };
+    $('#h-del').onclick = async () => {
+      if (!confirm('Hapus sesi ini permanen?')) return;
+      await api('/api/sessions/'+s.id, 'DELETE');
+      histDetail = null; render();
+    };
+    return;
+  }
+  const sessions = await api('/api/sessions').catch(()=>[]);
+  el.innerHTML = sessions.length ? sessions.map(s => `
+    <div class="hist card"><div class="row"><div class="grow">
+      <b>${esc(s.name)}</b> <span class="mut">${fmtDate(s.date)}</span><br>
+      <span class="mut">${s.exercises} gerakan · vol ${fmtVol(s.volume)} kg</span></div>
+      <button data-h="${s.id}">Lihat</button></div></div>`).join('')
+    : `<div class="card mut">Belum ada sesi tercatat.</div>`;
+  el.querySelectorAll('[data-h]').forEach(b => b.onclick = async () => {
+    histDetail = await api('/api/sessions/'+b.dataset.h); render();
+  });
+}
+
+/* ---------- TAB: TEMPLATE ---------- */
+let tplEdit = null;
+async function renderTemplates() {
+  const el = $('#tab-templates');
+  if (tplEdit) {
+    const t = tplEdit;
+    el.innerHTML = `<div class="card">
+      <button class="small kembali" id="t-back">← template</button>
+      <div class="row" style="margin:6px 0"><input id="t-name" class="grow" value="${esc(t.name)}">
+        <button class="small" id="t-rename">ok</button></div>
+      ${t.exercises.map(e=>`<div class="tpl-ex row">
+        <div class="grow"><b style="color:var(--txt)">${esc(e.name)}</b><br>
+        ${e.sets} set × ${e.reps_min||'?'}–${e.reps_max||'?'} reps
+        ${e.weight_min||e.weight_max?` · ${e.weight_min||0}–${e.weight_max||0} kg`:''}
+        ${e.note?` · ${esc(e.note)}`:''}</div>
+        <button class="small danger" data-tpdel="${e.id}">×</button></div>`).join('')}
+      <details><summary>+ tambah gerakan</summary>
+        <input id="te-name" placeholder="Nama gerakan">
+        <div class="row">
+          <input id="te-sets" type="number" placeholder="set" value="3" inputmode="numeric">
+          <input id="te-rmin" type="number" placeholder="rep min" inputmode="numeric">
+          <input id="te-rmax" type="number" placeholder="rep max" inputmode="numeric">
+        </div>
+        <div class="row">
+          <input id="te-wmin" type="number" placeholder="kg min" step="any" inputmode="decimal">
+          <input id="te-wmax" type="number" placeholder="kg max" step="any" inputmode="decimal">
+          <input id="te-note" placeholder="catatan (mis. per sisi)">
+        </div>
+        <button id="te-add" style="width:100%">Tambah</button>
+      </details>
+      <div class="row" style="margin-top:10px">
+        <button class="pri grow" id="t-start">Pakai untuk latihan hari ini</button>
+        <button class="danger" id="t-del">Hapus</button>
+      </div></div>`;
+    $('#t-back').onclick = () => { tplEdit = null; render(); };
+    $('#t-rename').onclick = async () => {
+      tplEdit = await api('/api/templates/'+t.id, 'PUT', {name: $('#t-name').value});
+      render();
+    };
+    $('#te-add').onclick = async () => {
+      const name = $('#te-name').value.trim(); if (!name) return;
+      const num = id => { const v = $(id).value; return v === '' ? null : parseFloat(v); };
+      await api(`/api/templates/${t.id}/exercises`, 'POST', {
+        name, sets: parseInt($('#te-sets').value)||3,
+        reps_min: num('#te-rmin'), reps_max: num('#te-rmax'),
+        weight_min: num('#te-wmin'), weight_max: num('#te-wmax'),
+        note: $('#te-note').value.trim()
+      });
+      const all = await api('/api/templates');
+      tplEdit = all.find(x => x.id === t.id); render();
+    };
+    el.querySelectorAll('[data-tpdel]').forEach(b => b.onclick = async () => {
+      await api('/api/template-exercises/'+b.dataset.tpdel, 'DELETE');
+      const all = await api('/api/templates');
+      tplEdit = all.find(x => x.id === t.id); render();
+    });
+    $('#t-start').onclick = async () => {
+      activeSession = await api(`/api/templates/${t.id}/start-from-template`, 'POST');
+      tplEdit = null; curTab = 'workout';
+      document.querySelectorAll('nav button').forEach(x =>
+        x.classList.toggle('on', x.dataset.tab === 'workout'));
+      ['workout','history','templates','progress'].forEach(x =>
+        $('#tab-'+x).hidden = (x !== 'workout'));
+      render();
+    };
+    $('#t-del').onclick = async () => {
+      if (!confirm('Hapus template ini?')) return;
+      await api('/api/templates/'+t.id, 'DELETE');
+      tplEdit = null; render();
+    };
+    return;
+  }
+  const templates = await api('/api/templates').catch(()=>[]);
+  el.innerHTML = `
+    <div class="card"><div class="row">
+      <input id="nt-name" class="grow" placeholder="Nama template baru (mis. Push)">
+      <button id="nt-add">+ Buat</button></div></div>
+    ${templates.map(t=>`<div class="card"><div class="row"><div class="grow">
+      <b>${esc(t.name)}</b><div class="mut">${t.exercises.length} gerakan</div></div>
+      <button data-t="${t.id}">Edit</button></div></div>`).join('')}`;
+  $('#nt-add').onclick = async () => {
+    const name = $('#nt-name').value.trim(); if (!name) return;
+    const all = await api('/api/templates', 'POST', {name});
+    render();
+  };
+}
+
+/* ---------- TAB: PROGRES ---------- */
+let progName = '', progMetric = 'max_weight';
+async function renderProgress() {
+  const el = $('#tab-progress');
+  const data = await api('/api/progress' + (progName ? '?name='+encodeURIComponent(progName) : ''))
+    .catch(()=>({names:[], points:[]}));
+  if (!progName && data.names.length) progName = data.names[0];
+  el.innerHTML = `<div class="card">
+    <select id="p-name">${data.names.map(n =>
+      `<option ${n===progName?'selected':''}>${esc(n)}</option>`).join('')}</select>
+    <div class="seg">
+      <button data-m="max_weight" class="${progMetric==='max_weight'?'on':''}">Beban max</button>
+      <button data-m="max_reps" class="${progMetric==='max_reps'?'on':''}">Reps max</button>
+      <button data-m="volume" class="${progMetric==='volume'?'on':''}">Volume</button>
+    </div>
+    <canvas id="p-chart" width="600" height="220"></canvas>
+    <div class="mut" id="p-info"></div></div>`;
+  $('#p-name').onchange = async e => {
+    progName = e.target.value;
+    const d = await api('/api/progress?name='+encodeURIComponent(progName)).catch(()=>({points:[]}));
+    drawChart(d.points);
+  };
+  el.querySelectorAll('[data-m]').forEach(b => b.onclick = () => {
+    progMetric = b.dataset.m; render();
+  });
+  drawChart(data.points);
+}
+function drawChart(points) {
+  const c = $('#p-chart'); if (!c) return;
+  const ctx = c.getContext('2d');
+  const W = c.width, H = c.height;
+  ctx.clearRect(0,0,W,H);
+  const info = $('#p-info');
+  if (!points.length) { info.textContent = 'Belum ada data untuk gerakan ini.'; return; }
+  const vals = points.map(p => p[progMetric]);
+  const max = Math.max(...vals, 1), min = Math.min(...vals, 0);
+  const pad = 36, x0 = pad, x1 = W - 12, y0 = 14, y1 = H - 30;
+  const X = i => points.length === 1 ? (x0+x1)/2 : x0 + (x1-x0)*i/(points.length-1);
+  const Y = v => y1 - (y1-y0)*(v-min)/((max-min)||1);
+  ctx.strokeStyle = '#2a323b'; ctx.fillStyle = '#93a1b0'; ctx.font = '11px sans-serif';
+  for (let g = 0; g <= 4; g++) {
+    const v = min + (max-min)*g/4, y = Y(v);
+    ctx.beginPath(); ctx.moveTo(x0,y); ctx.lineTo(x1,y); ctx.stroke();
+    ctx.fillText((Math.round(v*10)/10)+'', 4, y+4);
+  }
+  ctx.strokeStyle = '#4da3ff'; ctx.lineWidth = 2; ctx.beginPath();
+  points.forEach((p,i) => i ? ctx.lineTo(X(i),Y(p[progMetric])) : ctx.moveTo(X(i),Y(p[progMetric])));
+  ctx.stroke();
+  ctx.fillStyle = '#4da3ff';
+  points.forEach((p,i) => { ctx.beginPath(); ctx.arc(X(i),Y(p[progMetric]),4,0,7); ctx.fill(); });
+  ctx.fillStyle = '#93a1b0';
+  points.forEach((p,i) => { if (i % Math.ceil(points.length/6) === 0)
+    ctx.fillText(p.date.slice(5), X(i)-14, H-10); });
+  const last = points[points.length-1];
+  const unit = progMetric === 'volume' ? 'kg' : (progMetric === 'max_weight' ? 'kg' : 'reps');
+  info.textContent = `${points.length} sesi · terakhir ${last.date}: ${last[progMetric]} ${unit}`;
+}
+
+/* ---------- BOOT ---------- */
+async function render() {
+  if (!TOKEN) { showLogin(); return; }
+  try {
+    if (curTab==='workout') await renderWorkout();
+    else if (curTab==='history') await renderHistory();
+    else if (curTab==='templates') await renderTemplates();
+    else await renderProgress();
+  } catch(e) {
+    if (String(e.message).includes('unauthorized')) showLogin();
+    else console.warn(e);
+  }
+}
+render();
+</script>
+</body>
+</html>
